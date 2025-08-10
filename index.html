@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect 4 Ethiopia</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 {
+      margin-top: 20px;
+    }
+    #intro {
+      margin: 10px;
+      padding: 10px;
+      max-width: 500px;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(7, 60px);
+      grid-gap: 8px;
+      margin-top: 20px;
+    }
+    .cell {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .cell:hover {
+      background: #d0d0d0;
+    }
+    .player1 {
+      color: #f44336;
+    }
+    .player2 {
+      color: #3f51b5;
+    }
+    #status {
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    #restart {
+      margin-top: 10px;
+      padding: 8px 16px;
+      font-size: 16px;
+      border: none;
+      border-radius: 4px;
+      background: #4caf50;
+      color: #fff;
+      cursor: pointer;
+    }
+    #restart:hover {
+      background: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <h1>Connect 4 Ethiopia</h1>
+  <div id="intro">
+    <p>The goal of the game is to be the first to have four of the same icon in any direction.</p>
+    <p>Click a column to drop your candy. Player 1 uses 🍬 and Player 2 uses 🍭.</p>
+  </div>
+  <div id="board"></div>
+  <div id="status"></div>
+  <button id="restart" style="display:none;">Play Again</button>
+  <script>
+    (function() {
+      const ROWS = 6;
+      const COLS = 7;
+      const EMPTY = 0;
+      const P1 = 1;
+      const P2 = 2;
+      const board = [];
+      let currentPlayer = P1;
+      const boardDiv = document.getElementById('board');
+      const statusDiv = document.getElementById('status');
+      const restartBtn = document.getElementById('restart');
+
+      function initBoard() {
+        boardDiv.innerHTML = '';
+        board.length = 0;
+        for (let r = 0; r < ROWS; r++) {
+          board[r] = [];
+          for (let c = 0; c < COLS; c++) {
+            board[r][c] = EMPTY;
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.row = r;
+            cell.dataset.col = c;
+            cell.addEventListener('click', () => handleMove(c));
+            boardDiv.appendChild(cell);
+          }
+        }
+        currentPlayer = P1;
+        statusDiv.textContent = "Player 1's turn (🍬)";
+        restartBtn.style.display = 'none';
+      }
+
+      function handleMove(col) {
+        // find lowest empty slot in column
+        let targetRow = -1;
+        for (let r = ROWS - 1; r >= 0; r--) {
+          if (board[r][col] === EMPTY) {
+            targetRow = r;
+            break;
+          }
+        }
+        if (targetRow === -1) return; // column full
+        // animate drop
+        animateDrop(col, targetRow, () => {
+          board[targetRow][col] = currentPlayer;
+          const cellDiv = getCellDiv(targetRow, col);
+          cellDiv.textContent = currentPlayer === P1 ? '🍬' : '🍭';
+          cellDiv.classList.add(currentPlayer === P1 ? 'player1' : 'player2');
+          if (checkWinner(targetRow, col, currentPlayer)) {
+            statusDiv.textContent = `Player ${currentPlayer} wins!`;
+            restartBtn.style.display = 'block';
+            disableBoard();
+          } else if (isDraw()) {
+            statusDiv.textContent = "It's a draw.";
+            restartBtn.style.display = 'block';
+            disableBoard();
+          } else {
+            currentPlayer = currentPlayer === P1 ? P2 : P1;
+            statusDiv.textContent = `Player ${currentPlayer}'s turn (${currentPlayer === P1 ? '🍬' : '🍭'})`;
+          }
+        });
+      }
+
+      function animateDrop(col, targetRow, callback) {
+        let row = 0;
+        function dropStep() {
+          if (row > 0) {
+            const prev = getCellDiv(row - 1, col);
+            prev.textContent = '';
+            prev.classList.remove('player1', 'player2');
+          }
+          const curr = getCellDiv(row, col);
+          curr.textContent = currentPlayer === P1 ? '🍬' : '🍭';
+          curr.classList.add(currentPlayer === P1 ? 'player1' : 'player2');
+          if (row < targetRow) {
+            row++;
+            setTimeout(dropStep, 400 / (targetRow + 1));
+          } else {
+            // end of animation
+            setTimeout(callback, 50);
+          }
+        }
+        dropStep();
+      }
+
+      function getCellDiv(r, c) {
+        return boardDiv.children[r * COLS + c];
+      }
+
+      function checkWinner(r, c, player) {
+        function countDir(dr, dc) {
+          let count = 0;
+          let rr = r + dr;
+          let cc = c + dc;
+          while (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && board[rr][cc] === player) {
+            count++;
+            rr += dr;
+            cc += dc;
+          }
+          return count;
+        }
+        const dirs = [
+          [0, 1], [1, 0], [1, 1], [1, -1]
+        ];
+        return dirs.some(([dr, dc]) => 1 + countDir(dr, dc) + countDir(-dr, -dc) >= 4);
+      }
+
+      function isDraw() {
+        return board[0].every(cell => cell !== EMPTY);
+      }
+
+      function disableBoard() {
+        Array.from(boardDiv.children).forEach(cell => {
+          cell.removeEventListener('click', handleMove);
+        });
+      }
+
+      restartBtn.addEventListener('click', initBoard);
+      initBoard();
+    })();
+  </script>
+</body>
+</html>
