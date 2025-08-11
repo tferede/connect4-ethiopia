@@ -5,21 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Connect 4 Ethiopia</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="preload" href="assets/Landing.png" as="image" />
+  <link rel="preload" href="assets/Board.png" as="image" />
+  <link rel="preload" href="assets/Red.png" as="image" />
+  <link rel="preload" href="assets/Yellow.png" as="image" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <!-- Splash Screen -->
-  <div id="splashScreen" class="screen">
-    <img src="assets/Landing.png" alt="Landing" class="full-screen-img" />
+  <div id="splashScreen" class="screen splash">
+    <img src="assets/Landing.png" alt="Landing" class="splash-img" />
   </div>
 
   <!-- Welcome Screen -->
   <div id="welcomeScreen" class="screen hidden">
     <div class="message-box">
       <p>
-        Welcome to Connect 4 Ethiopia!<br />
+        <strong>Welcome to Connect 4 Ethiopia!</strong><br /><br />
         The goal of the game is to be the first to have 4 of the same icon in any direction.<br />
         The more games you play and win, the more points you receive.<br />
-        If you play against a top 20 player and you win, you will receive 4x the points!<br />
+        If you play against a top 20 player and you win, you will receive 4x the points!<br /><br />
         GOOD LUCK!
       </p>
     </div>
@@ -28,17 +33,29 @@
   <!-- Leaderboard Screen -->
   <div id="leaderboardScreen" class="screen hidden">
     <div class="message-box">
-      <h2>The top 20 leaders are:</h2>
-      <table id="leaderboardTable"></table>
+      <h2>The top players</h2>
+      <table id="leaderboardTable">
+        <thead><tr><th>#</th><th>Username</th><th>Points</th></tr></thead>
+        <tbody id="leaderboardBody"></tbody>
+      </table>
       <div class="button-row">
         <button id="playComputerBtn">Play vs Computer</button>
         <button id="playPlayerBtn">Play vs Player</button>
+      </div>
+      <div id="invitePanel" class="invite-panel hidden">
+        <input id="inviteInput" placeholder="@username or phone number" />
+        <button id="inviteSendBtn">Send Invite</button>
+        <div id="inviteInfo" class="invite-info"></div>
       </div>
     </div>
   </div>
 
   <!-- Game Screen -->
   <div id="gameScreen" class="screen hidden">
+    <div id="hud">
+      <div id="status">Your turn (Red)</div>
+      <button id="backBtn">↩︎ Back</button>
+    </div>
     <div id="boardWrapper">
       <div id="chipsLayer"></div>
       <canvas id="debugGrid" class="hidden"></canvas>
@@ -46,6 +63,10 @@
     </div>
   </div>
 
+  <script>
+    // Set this to your real bot username (no @)
+    window.BOT_USERNAME = "Connect4ET_bot";
+  </script>
   <script src="game.js"></script>
 </body>
 </html>
