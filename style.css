@@ -1,0 +1,45 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: sans-serif;
+  background: url("./assets/Board.png") center / cover no-repeat fixed;
+}
+
+.game-root {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  text-align: center;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  max-width: 700px;
+  margin: 24px auto;
+}
+
+.cell {
+  position: relative;
+  width: 100%;
+  padding-bottom: 100%;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  overflow: visible;
+}
+
+.chip {
+  width: 96px;
+  height: 96px;
+  background-image: url("./assets/Chips.png");
+  background-size: 512px 256px; /* adjust to sprite sheet size */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Example chip colors */
+.chip.red { background-position: 0px 0px; }
+.chip.yellow { background-position: -96px 0px; }
