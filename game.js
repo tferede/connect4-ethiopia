@@ -1,4 +1,4 @@
-\
+// Helpers
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
@@ -8,6 +8,17 @@ const screens = {
   leaderboard: $('#screen-leaderboard'),
   game: $('#screen-game'),
 };
+
+function showScreen(name){
+  // Hide all: add 'hidden', remove 'visible'
+  Object.entries(screens).forEach(([k, el]) => {
+    el.classList.add('hidden');
+    el.classList.remove('visible');
+  });
+  // Show target: remove 'hidden', add 'visible'
+  screens[name].classList.remove('hidden');
+  screens[name].classList.add('visible');
+}
 
 const leadersBody = $('#leaders-body');
 const btnVsComputer = $('#btn-vs-computer');
@@ -25,12 +36,6 @@ try {
     currentUser = Telegram.WebApp.initDataUnsafe.user.username;
   }
 } catch(e){ /* ignore */ }
-
-// Utility to show a screen
-function showScreen(name){
-  Object.values(screens).forEach(s => s.classList.remove('visible'));
-  screens[name].classList.add('visible');
-}
 
 // Leaderboard helpers (localStorage)
 function getLeaderboard(){
@@ -71,7 +76,6 @@ function renderLeaderboard(){
 function runOnboarding(){
   const params = new URLSearchParams(location.search);
   const onboarding = params.get('onboarding') === '1';
-  const payload = params.get('payload') || null; // invite_... for friend matches (web app can use later)
 
   if (onboarding){
     showScreen('splash');
@@ -88,17 +92,12 @@ function runOnboarding(){
   }
 
   btnVsComputer.addEventListener('click', ()=> startGame({mode:'computer'}));
-  btnVsPlayer.addEventListener('click', ()=> {
-    // Ask for opponent username for scoring (optional)
-    const opp = prompt("Enter opponent's Telegram username (without @) for scoring, or leave blank for Local Player 2:");
-    const opponent = (opp && opp.trim()) ? opp.trim() : 'LocalPlayer2';
-    startGame({mode:'player', opponent});
-  });
+  btnVsPlayer.addEventListener('click', ()=> openInvite());
 }
 
 // ---------------- Connect 4 Game ------------------
 const ROWS = 6, COLS = 7;
-let grid, current, vsComputer = false, gameOver = false, opponentName = 'LocalPlayer2';
+let grid, current, vsComputer = false, gameOver = false;
 
 function resetBoard(){
   boardEl.innerHTML='';
@@ -109,14 +108,13 @@ function resetBoard(){
     boardEl.appendChild(cell);
   }
   grid = Array.from({length:ROWS}, ()=> Array(COLS).fill(0));
-  current = 1; // 1=red (currentUser), 2=yellow (opponent or AI)
+  current = 1; // 1=red, 2=yellow
   gameOver = false;
-  statusEl.textContent = vsComputer ? 'Your turn (Red)' : 'Red turn (You)';
+  statusEl.textContent = 'Your turn (Red)';
 }
 
-function startGame({mode='computer', opponent='LocalPlayer2'}={}){
+function startGame({mode='computer'}={}){
   vsComputer = (mode==='computer');
-  opponentName = opponent;
   resetBoard();
   showScreen('game');
 }
@@ -144,16 +142,12 @@ function playerMove(col){
     }
     // switch
     current = (current===1?2:1);
-    if (vsComputer){
-      statusEl.textContent = current===1 ? 'Your turn (Red)' : 'Computer thinking…';
-      if (current===2){
-        setTimeout(()=>{
-          const c = pickAiColumn();
-          playerMove(c);
-        }, 300);
-      }
-    } else {
-      statusEl.textContent = current===1 ? 'Red turn (You)' : 'Yellow turn (' + opponentName + ')';
+    statusEl.textContent = current===1 ? 'Your turn (Red)' : (vsComputer ? 'Computer thinking…' : 'Yellow turn');
+    if (vsComputer && current===2){
+      setTimeout(()=>{
+        const c = pickAiColumn();
+        playerMove(c);
+      }, 300);
     }
   });
 }
@@ -221,7 +215,7 @@ function checkWin(player){
   }
   for (let c=0;c<COLS;c++){
     for (let r=0;r<ROWS-3;r++){
-      if (grid[r][c]===player && grid[r+1][c]===player && grid[r+2][c]===player && grid[r+3][c]===player) return true;
+      if (grid[r][c]===player && grid[r+1][c]===player && grid[r+2][c]===player && grid[r+3]===player) return true;
     }
   }
   for (let r=0;r<ROWS-3;r++){
@@ -239,52 +233,14 @@ function checkWin(player){
 
 function endGame(winner){
   gameOver = true;
-
-  // Determine scoring context BEFORE awarding
-  const opponentIsTop20 = inTop20(opponentName);
-
-  if (vsComputer){
-    if (winner===1){
-      statusEl.textContent = 'You win! (Red)';
-      addPoints(currentUser, 10);
-    } else if (winner===2){
-      statusEl.textContent = 'Computer wins!';
-      addPoints(currentUser, 3);
-    } else {
-      statusEl.textContent = 'Draw!';
-      addPoints(currentUser, 5);
-    }
+  // Basic local points (you can replace with your advanced rules file if needed)
+  if (winner===1){
+    statusEl.textContent = 'You win! (Red)';
+  } else if (winner===2){
+    statusEl.textContent = 'Yellow wins!';
   } else {
-    // vs another player (local scoring using usernames)
-    if (winner===1){
-      // currentUser (red) wins
-      if (opponentIsTop20){
-        addPoints(currentUser, 60);
-        addPoints(opponentName, 6);
-      } else {
-        addPoints(currentUser, 15);
-        addPoints(opponentName, 5);
-      }
-      statusEl.textContent = 'You win! (Red)';
-    } else if (winner===2){
-      // opponent (yellow) wins
-      if (opponentIsTop20){
-        addPoints(opponentName, 10);
-        addPoints(currentUser, 5);
-      } else {
-        addPoints(opponentName, 15);
-        addPoints(currentUser, 5);
-      }
-      statusEl.textContent = 'Yellow wins! (' + opponentName + ')';
-    } else {
-      // draw
-      addPoints(currentUser, 10);
-      addPoints(opponentName, 10);
-      statusEl.textContent = 'Draw!';
-    }
+    statusEl.textContent = 'Draw!';
   }
-
-  // After short delay, return to leaderboard
   setTimeout(()=>{
     renderLeaderboard();
     showScreen('leaderboard');
@@ -297,11 +253,32 @@ $('#btn-exit').addEventListener('click', ()=>{
   showScreen('leaderboard');
 });
 
+// Invite flow (unchanged basic generator)
+function openInvite(){
+  inviteWrap.classList.remove('hidden');
+  inviteResult.classList.add('hidden');
+  inviteInput.value = '';
+  $('#invite-generate').onclick = ()=>{
+    const v = inviteInput.value.trim();
+    if (!v){ alert('Please enter a @username or phone number'); return; }
+    const gameId = Date.now().toString();
+    // You can replace 'YourBot' with a hard-coded bot username if desired
+    const botUser = (window.Telegram?.WebApp?.initDataUnsafe?.receiver?.username) || 'YourBot';
+    const link = `https://t.me/${botUser}?startapp=invite_${gameId}`;
+    inviteResult.textContent = link;
+    inviteResult.classList.remove('hidden');
+  };
+  $('#invite-cancel').onclick = ()=>{
+    inviteWrap.classList.add('hidden');
+  };
+}
+
 // Boot
 document.addEventListener('DOMContentLoaded', ()=>{
   if (window.Telegram?.WebApp) {
     Telegram.WebApp.ready();
     Telegram.WebApp.expand();
   }
+  renderLeaderboard();
   runOnboarding();
 });
