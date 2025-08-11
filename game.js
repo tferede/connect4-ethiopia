@@ -1,284 +1,189 @@
-// Helpers
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
+// ==== CALIBRATION (set to align chip centers with the holes on Board.png) ====
+// Fractions of boardWrapper width/height for the inner grid rectangle that contains the 7x6 holes.
+let INSET_X = 0.065; // ~6.5% left & right (tweak if needed)
+let INSET_Y = 0.120; // ~12% top & bottom (tweak if needed)
 
-const screens = {
-  splash: $('#screen-splash'),
-  welcome: $('#screen-welcome'),
-  leaderboard: $('#screen-leaderboard'),
-  game: $('#screen-game'),
-};
+// Press 'g' to toggle a debug grid overlay to fine-tune INSET_X/INSET_Y.
+let debugOn = false;
 
-function showScreen(name){
-  // Hide all: add 'hidden', remove 'visible'
-  Object.entries(screens).forEach(([k, el]) => {
-    el.classList.add('hidden');
-    el.classList.remove('visible');
-  });
-  // Show target: remove 'hidden', add 'visible'
-  screens[name].classList.remove('hidden');
-  screens[name].classList.add('visible');
-}
-
-const leadersBody = $('#leaders-body');
-const btnVsComputer = $('#btn-vs-computer');
-const btnVsPlayer = $('#btn-vs-player');
-const statusEl = $('#status');
-const boardEl = $('#board');
-const inviteWrap = $('#invite-wrap');
-const inviteInput = $('#invite-input');
-const inviteResult = $('#invite-result');
-
-// Read Telegram user if running in WebApp
-let currentUser = 'Guest';
-try {
-  if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe?.user?.username) {
-    currentUser = Telegram.WebApp.initDataUnsafe.user.username;
-  }
-} catch(e){ /* ignore */ }
-
-// Leaderboard helpers (localStorage)
-function getLeaderboard(){
-  let data = localStorage.getItem('c4_leaders');
-  if (!data) return {};
-  try { return JSON.parse(data); } catch { return {}; }
-}
-function setLeaderboard(obj){
-  localStorage.setItem('c4_leaders', JSON.stringify(obj));
-}
-function addPoints(username, pts){
-  const lb = getLeaderboard();
-  lb[username] = (lb[username] || 0) + pts;
-  setLeaderboard(lb);
-}
-function inTop20(username){
-  if (!username) return false;
-  const lb = getLeaderboard();
-  const arr = Object.entries(lb).map(([u,p]) => ({u, p})).sort((a,b)=> b.p-a.p);
-  return arr.slice(0,20).some(row => row.u === username);
-}
-function renderLeaderboard(){
-  const lb = getLeaderboard();
-  const arr = Object.entries(lb).map(([u,p]) => ({u, p}));
-  arr.sort((a,b)=> b.p - a.p);
-  leadersBody.innerHTML = '';
-  arr.slice(0,20).forEach((row, i)=>{
-    const tr = document.createElement('tr');
-    const rank = document.createElement('td'); rank.textContent = i+1;
-    const user = document.createElement('td'); user.textContent = row.u;
-    const pts = document.createElement('td'); pts.textContent = row.p;
-    tr.append(rank,user,pts);
-    leadersBody.appendChild(tr);
-  });
-}
-
-// Onboarding flow
-function runOnboarding(){
-  const params = new URLSearchParams(location.search);
-  const onboarding = params.get('onboarding') === '1';
-
-  if (onboarding){
-    showScreen('splash');
-    setTimeout(()=>{
-      showScreen('welcome');
-      setTimeout(()=>{
-        renderLeaderboard();
-        showScreen('leaderboard');
-      }, 2000);
-    }, 2000);
-  } else {
-    renderLeaderboard();
-    showScreen('leaderboard');
-  }
-
-  btnVsComputer.addEventListener('click', ()=> startGame({mode:'computer'}));
-  btnVsPlayer.addEventListener('click', ()=> openInvite());
-}
-
-// ---------------- Connect 4 Game ------------------
+let currentPlayer = 'red';
 const ROWS = 6, COLS = 7;
-let grid, current, vsComputer = false, gameOver = false;
+let board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
 
-function resetBoard(){
-  boardEl.innerHTML='';
-  for (let i=0;i<ROWS*COLS;i++){
-    const cell = document.createElement('div');
-    cell.className = 'cell';
-    cell.dataset.index = i;
-    boardEl.appendChild(cell);
-  }
-  grid = Array.from({length:ROWS}, ()=> Array(COLS).fill(0));
-  current = 1; // 1=red, 2=yellow
-  gameOver = false;
-  statusEl.textContent = 'Your turn (Red)';
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
 }
 
-function startGame({mode='computer'}={}){
-  vsComputer = (mode==='computer');
-  resetBoard();
-  showScreen('game');
-}
+// Auto sequence (splash -> welcome -> leaderboard)
+window.addEventListener('load', () => {
+  showScreen('splashScreen');
+  setTimeout(() => {
+    showScreen('welcomeScreen');
+    setTimeout(() => {
+      loadLeaderboard();
+      showScreen('leaderboardScreen');
+    }, 2000);
+  }, 2000);
 
-boardEl.addEventListener('click', (e)=>{
-  if (gameOver) return;
-  const cell = e.target.closest('.cell');
-  if (!cell) return;
-  const col = Number(cell.dataset.index) % COLS;
-  playerMove(col);
+  document.getElementById('playComputerBtn').addEventListener('click', startGame);
+  document.getElementById('playPlayerBtn').addEventListener('click', startGame);
+
+  window.addEventListener('resize', () => {
+    if (!document.getElementById('gameScreen').classList.contains('hidden')) {
+      renderBoard();
+    }
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'g') {
+      debugOn = !debugOn;
+      renderBoard();
+    }
+  });
 });
 
-function playerMove(col){
-  const row = findDropRow(col);
-  if (row === -1) return; // column full
-  animateDrop(row,col, current === 1 ? 'red' : 'yellow', ()=>{
-    grid[row][col] = current;
-    if (checkWin(current)){
-      endGame(current);
-      return;
-    }
-    if (isBoardFull()){
-      endGame(0); // draw
-      return;
-    }
-    // switch
-    current = (current===1?2:1);
-    statusEl.textContent = current===1 ? 'Your turn (Red)' : (vsComputer ? 'Computer thinking…' : 'Yellow turn');
-    if (vsComputer && current===2){
-      setTimeout(()=>{
-        const c = pickAiColumn();
-        playerMove(c);
-      }, 300);
-    }
-  });
-}
-
-function findDropRow(col){
-  for (let r=ROWS-1;r>=0;r--){
-    if (grid[r][col] === 0) return r;
+function loadLeaderboard() {
+  const table = document.getElementById('leaderboardTable');
+  table.innerHTML = '<tr><th>#</th><th>Username</th><th>Points</th></tr>';
+  for (let i = 1; i <= 20; i++) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i}</td><td>Player${i}</td><td>${Math.floor(Math.random()*100)}</td>`;
+    table.appendChild(tr);
   }
-  return -1;
 }
 
-// 0.4s drop animation
-function animateDrop(targetRow, col, color, done){
-  const cells = [...boardEl.children];
-  const colXCell = cells[col]; // top cell in column for x-position
-  const falling = document.createElement('div');
-  falling.className = 'falling-chip ' + color;
-  const columnRect = boardEl.getBoundingClientRect();
-  const firstCellRect = colXCell.getBoundingClientRect();
+function startGame() {
+  showScreen('gameScreen');
+  // Click anywhere on board to drop into the clicked column
+  document.getElementById('boardWrapper').onclick = (e) => {
+    const idx = columnFromEvent(e);
+    if (idx !== null) placeInColumn(idx);
+  };
+  renderBoard();
+}
 
-  const colCenterX = firstCellRect.left + firstCellRect.width/2 - columnRect.left;
-  falling.style.left = (colCenterX) + 'px';
-  falling.style.top = '0px';
-  falling.style.transform = 'translate(-50%, -50%)';
+function renderBoard() {
+  const chipsLayer = document.getElementById('chipsLayer');
+  const debugCanvas = document.getElementById('debugGrid');
+  const wrapper = document.getElementById('boardWrapper');
+  const w = wrapper.clientWidth, h = wrapper.clientHeight;
 
-  boardEl.appendChild(falling);
+  chipsLayer.innerHTML = '';
+  debugCanvas.width = w; debugCanvas.height = h;
+  debugCanvas.classList.toggle('hidden', !debugOn);
 
-  const bottomCellIndex = targetRow * COLS + col;
-  const bottomCellRect = cells[bottomCellIndex].getBoundingClientRect();
-  const finalY = (bottomCellRect.top + bottomCellRect.height/2) - columnRect.top;
+  const gridLeft = INSET_X * w;
+  const gridTop = INSET_Y * h;
+  const gridW = w * (1 - 2*INSET_X);
+  const gridH = h * (1 - 2*INSET_Y);
+  const cellW = gridW / COLS;
+  const cellH = gridH / ROWS;
 
-  falling.style.transition = 'top 0.4s ease-in';
+  // Draw debug grid if enabled
+  if (debugOn) {
+    const ctx = debugCanvas.getContext('2d');
+    ctx.clearRect(0,0,w,h);
+    ctx.strokeStyle = 'rgba(0,255,0,0.6)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(gridLeft, gridTop, gridW, gridH);
+    // vertical lines
+    for (let c=1;c<COLS;c++) {
+      const x = gridLeft + c*cellW;
+      ctx.beginPath(); ctx.moveTo(x, gridTop); ctx.lineTo(x, gridTop+gridH); ctx.stroke();
+    }
+    // horizontal lines
+    for (let r=1;r<ROWS;r++) {
+      const y = gridTop + r*cellH;
+      ctx.beginPath(); ctx.moveTo(gridLeft, y); ctx.lineTo(gridLeft+gridW, y); ctx.stroke();
+    }
+    // centers
+    ctx.fillStyle = 'rgba(255,0,0,0.8)';
+    for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+      const cx = gridLeft + c*cellW + cellW/2;
+      const cy = gridTop + r*cellH + cellH/2;
+      ctx.beginPath(); ctx.arc(cx, cy, Math.min(cellW,cellH)*0.05, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  // Render chips already in the board
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (board[r][c]) {
+        const {cx, cy, size} = slotCenter(w, h, r, c);
+        const chip = document.createElement('img');
+        chip.src = board[r][c] === 'red' ? 'assets/Red.png' : 'assets/Yellow.png';
+        chip.className = 'chip';
+        chip.style.left = `${cx}px`;
+        chip.style.top = `${cy}px`;
+        chip.style.width = `${size}px`;
+        chipsLayer.appendChild(chip);
+      }
+    }
+  }
+}
+
+// Compute column index from a click/tap
+function columnFromEvent(e){
+  const wrapper = document.getElementById('boardWrapper');
+  const rect = wrapper.getBoundingClientRect();
+  const w = rect.width, h = rect.height;
+  const x = e.clientX - rect.left;
+  const gridLeft = INSET_X * w;
+  const gridW = w * (1 - 2*INSET_X);
+  if (x < gridLeft || x > gridLeft + gridW) return null;
+  const cellW = gridW / 7;
+  const col = Math.floor((x - gridLeft) / cellW);
+  return Math.max(0, Math.min(6, col));
+}
+
+// Find the lowest empty row in a column and place a chip there with a falling animation
+function placeInColumn(col){
+  let row = -1;
+  for (let r = ROWS-1; r >= 0; r--) {
+    if (!board[r][col]) { row = r; break; }
+  }
+  if (row === -1) return; // full column
+
+  const wrapper = document.getElementById('boardWrapper');
+  const chipsLayer = document.getElementById('chipsLayer');
+  const rect = wrapper.getBoundingClientRect();
+  const w = rect.width, h = rect.height;
+  const {cx, cy, size} = slotCenter(w,h,row,col);
+
+  // falling chip
+  const chip = document.createElement('img');
+  chip.src = currentPlayer === 'red' ? 'assets/Red.png' : 'assets/Yellow.png';
+  chip.className = 'chip';
+  chip.style.left = `${cx}px`;
+  chip.style.top = `-${size}px`; // start above
+  chip.style.width = `${size}px`;
+  chipsLayer.appendChild(chip);
+
+  // animate to target
   requestAnimationFrame(()=>{
-    falling.style.top = finalY + 'px';
+    chip.style.top = `${cy}px`;
   });
 
   setTimeout(()=>{
-    falling.remove();
-    const chip = document.createElement('div');
-    chip.className = 'chip ' + color;
-    const targetCell = cells[bottomCellIndex];
-    targetCell.appendChild(chip);
-    done && done();
+    // finalize state and render static
+    board[row][col] = currentPlayer;
+    renderBoard();
+    // switch player (local two-player demo)
+    currentPlayer = (currentPlayer === 'red') ? 'yellow' : 'red';
   }, 420);
 }
 
-// Simple AI
-function pickAiColumn(){
-  const order = [3,2,4,1,5,0,6];
-  for (const c of order){
-    if (findDropRow(c) !== -1) return c;
-  }
-  return 0;
+// Compute center + size for a slot
+function slotCenter(w, h, row, col){
+  const gridLeft = INSET_X * w;
+  const gridTop  = INSET_Y * h;
+  const gridW = w * (1 - 2*INSET_X);
+  const gridH = h * (1 - 2*INSET_Y);
+  const cellW = gridW / 7;
+  const cellH = gridH / 6;
+  const cx = gridLeft + col*cellW + cellW/2;
+  const cy = gridTop  + row*cellH + cellH/2;
+  const size = Math.min(cellW, cellH) * 0.88; // chip diameter inside hole
+  return {cx, cy, size};
 }
-
-function isBoardFull(){
-  return grid[0].every(v => v !== 0);
-}
-
-function checkWin(player){
-  for (let r=0;r<ROWS;r++){
-    for (let c=0;c<COLS-3;c++){
-      if (grid[r][c]===player && grid[r][c+1]===player && grid[r][c+2]===player && grid[r][c+3]===player) return true;
-    }
-  }
-  for (let c=0;c<COLS;c++){
-    for (let r=0;r<ROWS-3;r++){
-      if (grid[r][c]===player && grid[r+1][c]===player && grid[r+2][c]===player && grid[r+3]===player) return true;
-    }
-  }
-  for (let r=0;r<ROWS-3;r++){
-    for (let c=0;c<COLS-3;c++){
-      if (grid[r][c]===player && grid[r+1][c+1]===player && grid[r+2][c+2]===player && grid[r+3][c+3]===player) return true;
-    }
-  }
-  for (let r=3;r<ROWS;r++){
-    for (let c=0;c<COLS-3;c++){
-      if (grid[r][c]===player && grid[r-1][c+1]===player && grid[r-2][c+2]===player && grid[r-3][c+3]===player) return true;
-    }
-  }
-  return false;
-}
-
-function endGame(winner){
-  gameOver = true;
-  // Basic local points (you can replace with your advanced rules file if needed)
-  if (winner===1){
-    statusEl.textContent = 'You win! (Red)';
-  } else if (winner===2){
-    statusEl.textContent = 'Yellow wins!';
-  } else {
-    statusEl.textContent = 'Draw!';
-  }
-  setTimeout(()=>{
-    renderLeaderboard();
-    showScreen('leaderboard');
-  }, 1500);
-}
-
-// Back button
-$('#btn-exit').addEventListener('click', ()=>{
-  renderLeaderboard();
-  showScreen('leaderboard');
-});
-
-// Invite flow (unchanged basic generator)
-function openInvite(){
-  inviteWrap.classList.remove('hidden');
-  inviteResult.classList.add('hidden');
-  inviteInput.value = '';
-  $('#invite-generate').onclick = ()=>{
-    const v = inviteInput.value.trim();
-    if (!v){ alert('Please enter a @username or phone number'); return; }
-    const gameId = Date.now().toString();
-    // You can replace 'YourBot' with a hard-coded bot username if desired
-    const botUser = (window.Telegram?.WebApp?.initDataUnsafe?.receiver?.username) || 'YourBot';
-    const link = `https://t.me/${botUser}?startapp=invite_${gameId}`;
-    inviteResult.textContent = link;
-    inviteResult.classList.remove('hidden');
-  };
-  $('#invite-cancel').onclick = ()=>{
-    inviteWrap.classList.add('hidden');
-  };
-}
-
-// Boot
-document.addEventListener('DOMContentLoaded', ()=>{
-  if (window.Telegram?.WebApp) {
-    Telegram.WebApp.ready();
-    Telegram.WebApp.expand();
-  }
-  renderLeaderboard();
-  runOnboarding();
-});

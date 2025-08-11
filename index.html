@@ -4,79 +4,48 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Connect 4 Ethiopia</title>
-  <link rel="stylesheet" href="./style.css" />
-  <link rel="preload" href="./assets/Board.png" as="image" />
-  <link rel="preload" href="./assets/Chips.png" as="image" />
-  <link rel="preload" href="./assets/Landing.png" as="image" />
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="app">
-    <!-- Splash (Landing.png) -->
-    <section id="screen-splash" class="screen full-bg hidden">
-      <img src="./assets/Landing.png" alt="Landing" class="cover-image" />
-    </section>
-
-    <!-- Welcome screen -->
-    <section id="screen-welcome" class="screen orange hidden">
-      <div class="centered">
-        <h1>Welcome to Connect 4 Ethiopia!</h1>
-        <p>
-          The goal of the game is to be the first to have 4 of the same icon in any direction.
-        </p>
-        <p>
-          The more games you play and win, the more points you receive.
-        </p>
-        <p>
-          If you play against a top 20 player and you win, you will receive 4x the points!
-        </p>
-        <p class="bold">GOOD LUCK!</p>
-      </div>
-    </section>
-
-    <!-- Leaderboard + mode select -->
-    <section id="screen-leaderboard" class="screen orange hidden">
-      <div class="centered">
-        <h2>The top 20 leaders are:</h2>
-        <div class="table-wrap">
-          <table id="leaders-table">
-            <thead>
-              <tr><th>#</th><th>Username</th><th>Points</th></tr>
-            </thead>
-            <tbody id="leaders-body">
-              <!-- Filled by JS -->
-            </tbody>
-          </table>
-        </div>
-        <div class="button-row">
-          <button id="btn-vs-computer" class="big-btn">Play vs Computer</button>
-          <button id="btn-vs-player" class="big-btn">Play vs Player</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Game screen -->
-    <section id="screen-game" class="screen game hidden">
-      <div class="hud">
-        <div id="status">Your turn (Red)</div>
-        <button id="btn-exit" class="small-btn">↩︎ Back to Leaderboard</button>
-      </div>
-      <div id="board" class="board"></div>
-      <div class="invite-wrap hidden" id="invite-wrap">
-        <div class="invite-card">
-          <h3>Invite a friend</h3>
-          <p>Enter their Telegram username (with or without @) or phone number:</p>
-          <input id="invite-input" class="invite-input" placeholder="@username or 2519xxxxxxx"/>
-          <div class="button-row">
-            <button id="invite-generate" class="big-btn">Generate Invite Link</button>
-            <button id="invite-cancel" class="big-btn secondary">Cancel</button>
-          </div>
-          <div id="invite-result" class="invite-result hidden"></div>
-        </div>
-      </div>
-    </section>
+  <!-- Splash Screen -->
+  <div id="splashScreen" class="screen">
+    <img src="assets/Landing.png" alt="Landing" class="full-screen-img" />
   </div>
 
-  <script src="./game.js"></script>
+  <!-- Welcome Screen -->
+  <div id="welcomeScreen" class="screen hidden">
+    <div class="message-box">
+      <p>
+        Welcome to Connect 4 Ethiopia!<br />
+        The goal of the game is to be the first to have 4 of the same icon in any direction.<br />
+        The more games you play and win, the more points you receive.<br />
+        If you play against a top 20 player and you win, you will receive 4x the points!<br />
+        GOOD LUCK!
+      </p>
+    </div>
+  </div>
+
+  <!-- Leaderboard Screen -->
+  <div id="leaderboardScreen" class="screen hidden">
+    <div class="message-box">
+      <h2>The top 20 leaders are:</h2>
+      <table id="leaderboardTable"></table>
+      <div class="button-row">
+        <button id="playComputerBtn">Play vs Computer</button>
+        <button id="playPlayerBtn">Play vs Player</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Screen -->
+  <div id="gameScreen" class="screen hidden">
+    <div id="boardWrapper">
+      <div id="chipsLayer"></div>
+      <canvas id="debugGrid" class="hidden"></canvas>
+      <img src="assets/Board.png" alt="Board" id="boardImage" />
+    </div>
+  </div>
+
+  <script src="game.js"></script>
 </body>
 </html>
