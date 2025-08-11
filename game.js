@@ -1,4 +1,4 @@
-// Basic state
+\
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
@@ -32,7 +32,7 @@ function showScreen(name){
   screens[name].classList.add('visible');
 }
 
-// Local leaderboard storage
+// Leaderboard helpers (localStorage)
 function getLeaderboard(){
   let data = localStorage.getItem('c4_leaders');
   if (!data) return {};
@@ -45,6 +45,12 @@ function addPoints(username, pts){
   const lb = getLeaderboard();
   lb[username] = (lb[username] || 0) + pts;
   setLeaderboard(lb);
+}
+function inTop20(username){
+  if (!username) return false;
+  const lb = getLeaderboard();
+  const arr = Object.entries(lb).map(([u,p]) => ({u, p})).sort((a,b)=> b.p-a.p);
+  return arr.slice(0,20).some(row => row.u === username);
 }
 function renderLeaderboard(){
   const lb = getLeaderboard();
@@ -65,7 +71,7 @@ function renderLeaderboard(){
 function runOnboarding(){
   const params = new URLSearchParams(location.search);
   const onboarding = params.get('onboarding') === '1';
-  const payload = params.get('payload') || null; // invite_... for friend matches
+  const payload = params.get('payload') || null; // invite_... for friend matches (web app can use later)
 
   if (onboarding){
     showScreen('splash');
@@ -81,33 +87,18 @@ function runOnboarding(){
     showScreen('leaderboard');
   }
 
-  // Button wiring
   btnVsComputer.addEventListener('click', ()=> startGame({mode:'computer'}));
-  btnVsPlayer.addEventListener('click', ()=> openInvite());
-}
-
-// Invite flow
-function openInvite(){
-  inviteWrap.classList.remove('hidden');
-  inviteResult.classList.add('hidden');
-  inviteInput.value = '';
-  $('#invite-generate').onclick = ()=>{
-    const v = inviteInput.value.trim();
-    if (!v){ alert('Please enter a @username or phone number'); return; }
-    const gameId = Date.now().toString();
-    const botUser = (window.Telegram?.WebApp?.initDataUnsafe?.receiver?.username) || 'YourBot'; // fallback
-    const link = `https://t.me/${botUser}?startapp=invite_${gameId}`;
-    inviteResult.textContent = link;
-    inviteResult.classList.remove('hidden');
-  };
-  $('#invite-cancel').onclick = ()=>{
-    inviteWrap.classList.add('hidden');
-  };
+  btnVsPlayer.addEventListener('click', ()=> {
+    // Ask for opponent username for scoring (optional)
+    const opp = prompt("Enter opponent's Telegram username (without @) for scoring, or leave blank for Local Player 2:");
+    const opponent = (opp && opp.trim()) ? opp.trim() : 'LocalPlayer2';
+    startGame({mode:'player', opponent});
+  });
 }
 
 // ---------------- Connect 4 Game ------------------
 const ROWS = 6, COLS = 7;
-let grid, current, vsComputer = false, gameOver = false;
+let grid, current, vsComputer = false, gameOver = false, opponentName = 'LocalPlayer2';
 
 function resetBoard(){
   boardEl.innerHTML='';
@@ -118,13 +109,14 @@ function resetBoard(){
     boardEl.appendChild(cell);
   }
   grid = Array.from({length:ROWS}, ()=> Array(COLS).fill(0));
-  current = 1; // 1=red, 2=yellow
+  current = 1; // 1=red (currentUser), 2=yellow (opponent or AI)
   gameOver = false;
-  statusEl.textContent = 'Your turn (Red)';
+  statusEl.textContent = vsComputer ? 'Your turn (Red)' : 'Red turn (You)';
 }
 
-function startGame({mode='computer'}={}){
+function startGame({mode='computer', opponent='LocalPlayer2'}={}){
   vsComputer = (mode==='computer');
+  opponentName = opponent;
   resetBoard();
   showScreen('game');
 }
@@ -152,12 +144,16 @@ function playerMove(col){
     }
     // switch
     current = (current===1?2:1);
-    statusEl.textContent = current===1 ? 'Your turn (Red)' : (vsComputer ? 'Computer thinking…' : 'Yellow turn');
-    if (vsComputer && current===2){
-      setTimeout(()=>{
-        const c = pickAiColumn();
-        playerMove(c);
-      }, 300);
+    if (vsComputer){
+      statusEl.textContent = current===1 ? 'Your turn (Red)' : 'Computer thinking…';
+      if (current===2){
+        setTimeout(()=>{
+          const c = pickAiColumn();
+          playerMove(c);
+        }, 300);
+      }
+    } else {
+      statusEl.textContent = current===1 ? 'Red turn (You)' : 'Yellow turn (' + opponentName + ')';
     }
   });
 }
@@ -178,16 +174,13 @@ function animateDrop(targetRow, col, color, done){
   const columnRect = boardEl.getBoundingClientRect();
   const firstCellRect = colXCell.getBoundingClientRect();
 
-  // Anchor to column center
   const colCenterX = firstCellRect.left + firstCellRect.width/2 - columnRect.left;
   falling.style.left = (colCenterX) + 'px';
   falling.style.top = '0px';
   falling.style.transform = 'translate(-50%, -50%)';
 
-  // Place in board container for absolute positioning
   boardEl.appendChild(falling);
 
-  // Compute final Y
   const bottomCellIndex = targetRow * COLS + col;
   const bottomCellRect = cells[bottomCellIndex].getBoundingClientRect();
   const finalY = (bottomCellRect.top + bottomCellRect.height/2) - columnRect.top;
@@ -199,7 +192,6 @@ function animateDrop(targetRow, col, color, done){
 
   setTimeout(()=>{
     falling.remove();
-    // Place final chip into the target cell
     const chip = document.createElement('div');
     chip.className = 'chip ' + color;
     const targetCell = cells[bottomCellIndex];
@@ -208,9 +200,8 @@ function animateDrop(targetRow, col, color, done){
   }, 420);
 }
 
-// Simple AI: pick first available column, or random available
+// Simple AI
 function pickAiColumn(){
-  // try center-first heuristic
   const order = [3,2,4,1,5,0,6];
   for (const c of order){
     if (findDropRow(c) !== -1) return c;
@@ -223,25 +214,21 @@ function isBoardFull(){
 }
 
 function checkWin(player){
-  // horizontal
   for (let r=0;r<ROWS;r++){
     for (let c=0;c<COLS-3;c++){
       if (grid[r][c]===player && grid[r][c+1]===player && grid[r][c+2]===player && grid[r][c+3]===player) return true;
     }
   }
-  // vertical
   for (let c=0;c<COLS;c++){
     for (let r=0;r<ROWS-3;r++){
       if (grid[r][c]===player && grid[r+1][c]===player && grid[r+2][c]===player && grid[r+3][c]===player) return true;
     }
   }
-  // diag down-right
   for (let r=0;r<ROWS-3;r++){
     for (let c=0;c<COLS-3;c++){
       if (grid[r][c]===player && grid[r+1][c+1]===player && grid[r+2][c+2]===player && grid[r+3][c+3]===player) return true;
     }
   }
-  // diag up-right
   for (let r=3;r<ROWS;r++){
     for (let c=0;c<COLS-3;c++){
       if (grid[r][c]===player && grid[r-1][c+1]===player && grid[r-2][c+2]===player && grid[r-3][c+3]===player) return true;
@@ -252,16 +239,51 @@ function checkWin(player){
 
 function endGame(winner){
   gameOver = true;
-  if (winner===1){
-    statusEl.textContent = 'You win! (Red)';
-    addPoints(currentUser, 10); // vs computer default
-  } else if (winner===2){
-    statusEl.textContent = vsComputer ? 'Computer wins!' : 'Yellow wins!';
-    addPoints(currentUser, 3); // vs computer default loss
+
+  // Determine scoring context BEFORE awarding
+  const opponentIsTop20 = inTop20(opponentName);
+
+  if (vsComputer){
+    if (winner===1){
+      statusEl.textContent = 'You win! (Red)';
+      addPoints(currentUser, 10);
+    } else if (winner===2){
+      statusEl.textContent = 'Computer wins!';
+      addPoints(currentUser, 3);
+    } else {
+      statusEl.textContent = 'Draw!';
+      addPoints(currentUser, 5);
+    }
   } else {
-    statusEl.textContent = 'Draw!';
-    addPoints(currentUser, 5);
+    // vs another player (local scoring using usernames)
+    if (winner===1){
+      // currentUser (red) wins
+      if (opponentIsTop20){
+        addPoints(currentUser, 60);
+        addPoints(opponentName, 6);
+      } else {
+        addPoints(currentUser, 15);
+        addPoints(opponentName, 5);
+      }
+      statusEl.textContent = 'You win! (Red)';
+    } else if (winner===2){
+      // opponent (yellow) wins
+      if (opponentIsTop20){
+        addPoints(opponentName, 10);
+        addPoints(currentUser, 5);
+      } else {
+        addPoints(opponentName, 15);
+        addPoints(currentUser, 5);
+      }
+      statusEl.textContent = 'Yellow wins! (' + opponentName + ')';
+    } else {
+      // draw
+      addPoints(currentUser, 10);
+      addPoints(opponentName, 10);
+      statusEl.textContent = 'Draw!';
+    }
   }
+
   // After short delay, return to leaderboard
   setTimeout(()=>{
     renderLeaderboard();
