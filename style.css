@@ -8,7 +8,7 @@ html, body {
 
 .screen {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -16,25 +16,25 @@ html, body {
 
 .hidden { display: none !important; }
 
-/* Splash should show full image fully visible */
+/* Splash shows full image fully visible */
 .splash { background: #000; }
 .splash-img {
   width: 100vw;
   height: 100vh;
-  object-fit: contain;  /* show entire image */
+  object-fit: contain;   /* full image visible */
   object-position: center;
   display: block;
   background: #000;
 }
 
 .message-box {
-  background: rgba(255, 165, 0, 0.9);
+  background: rgba(255, 165, 0, 0.92);
   color: #fff;
   padding: 20px;
   max-width: 92vw;
   text-align: center;
   border-radius: 12px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 #leaderboardTable {
@@ -66,33 +66,33 @@ button {
   color: #fff;
 }
 
-.invite-panel { margin-top: 12px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.invite-panel { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
 #inviteInput {
   width: 260px;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid #999;
 }
-.invite-info { color: #fff; font-size: 14px; margin-top: 6px; text-align: center; }
+.invite-info { color: #fff; font-size: 14px; margin-top: 6px; text-align: center; max-width: 90%; }
+.invite-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 
-#hud {
+/* Game layout: board takes >= 50% of screen height */
+#gameLayout {
   width: 100%;
-  max-width: 720px;
+  max-width: 900px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  margin: 0 12px 10px;
-  color: #fff;
+  padding: 12px;
 }
-#backBtn { background: #333; color: #fff; padding: 8px 12px; border-radius: 10px; border: none; }
 
 #boardWrapper {
   position: relative;
-  width: 100%;
-  max-width: 720px;
+  width: 95vw;           /* will be resized via JS to keep >= 50vh */
+  max-width: 900px;
   aspect-ratio: 7 / 6;
-  margin: 0 12px;
+  background: transparent;
 }
 
 #boardImage {
@@ -110,6 +110,18 @@ button {
   height: 100%;
   pointer-events: none;
 }
+
+#hud {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #fff;
+}
+#status { opacity: 0.95; }
+.back { background: #333; color: #fff; padding: 8px 12px; border-radius: 10px; border: none; }
 
 .chip {
   position: absolute;

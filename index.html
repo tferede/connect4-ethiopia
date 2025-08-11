@@ -42,24 +42,33 @@
         <button id="playComputerBtn">Play vs Computer</button>
         <button id="playPlayerBtn">Play vs Player</button>
       </div>
+
+      <!-- Invite UI -->
       <div id="invitePanel" class="invite-panel hidden">
         <input id="inviteInput" placeholder="@username or phone number" />
-        <button id="inviteSendBtn">Send Invite</button>
+        <button id="inviteSendBtn">Create & Send Invite</button>
         <div id="inviteInfo" class="invite-info"></div>
+        <div id="inviteActions" class="invite-actions hidden">
+          <button id="copyInviteBtn">Copy link</button>
+          <button id="openChatBtn">Open chat</button>
+          <button id="shareBtn">Share via Telegram</button>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Game Screen -->
   <div id="gameScreen" class="screen hidden">
-    <div id="hud">
-      <div id="status">Your turn (Red)</div>
-      <button id="backBtn">↩︎ Back</button>
-    </div>
-    <div id="boardWrapper">
-      <div id="chipsLayer"></div>
-      <canvas id="debugGrid" class="hidden"></canvas>
-      <img src="assets/Board.png" alt="Board" id="boardImage" />
+    <div id="gameLayout">
+      <div id="boardWrapper">
+        <div id="chipsLayer"></div>
+        <canvas id="debugGrid" class="hidden" aria-hidden="true"></canvas>
+        <img src="assets/Board.png" alt="Board" id="boardImage" />
+      </div>
+      <div id="hud">
+        <div id="status">Your turn (Red) — tap a column.</div>
+        <button id="backBtn" class="back">↩︎ Back</button>
+      </div>
     </div>
   </div>
 
