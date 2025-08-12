@@ -36,7 +36,7 @@ window.addEventListener('load', async ()=>{
   document.getElementById('inviteSendBtn').onclick = sendInvite;
   document.getElementById('backBtn').onclick = ()=>{ renderLeaderboard(); show('leaderboardScreen'); };
 
-  // Pointer support (touch + mouse)
+  // Make sure input works on both mouse and touch
   const wrapper = document.getElementById('boardWrapper');
   wrapper.addEventListener('pointerdown', (e)=>{
     if (document.getElementById('gameScreen').classList.contains('hidden')) return;
@@ -82,7 +82,6 @@ function smooth(arr, k=5){
   }
   return out;
 }
-
 function longestRunBelow(arr, thr){
   let bestStart=0,bestLen=0,curStart=0,curLen=0;
   for(let i=0;i<arr.length;i++){
@@ -92,7 +91,6 @@ function longestRunBelow(arr, thr){
   if(curLen>bestLen){ bestLen=curLen; bestStart=curStart; }
   return [bestStart, bestStart+bestLen-1];
 }
-
 function calibrateFromImage(img){
   const iw = img.naturalWidth, ih = img.naturalHeight;
   const cv = document.createElement('canvas'); cv.width=iw; cv.height=ih;
@@ -105,7 +103,7 @@ function calibrateFromImage(img){
   r/=c; g/=c; b/=c; const thr=50;
   const isBg=(x,y)=>{ const i=(y*iw+x)*4, dr=data[i]-r,dg=data[i+1]-g,db=data[i+2]-b; return (dr*dr+dg*dg+db*db)<thr*thr; };
 
-  // project orange fraction across columns and rows
+  // project background fraction across columns and rows
   const y1=Math.floor(ih*0.15), y2=Math.floor(ih*0.85);
   const colFrac=new Array(iw).fill(0);
   for(let x=0;x<iw;x++){
@@ -123,11 +121,9 @@ function calibrateFromImage(img){
   const cMin=Math.min(...cS), cMax=Math.max(...cS), cThr=(cMin+cMax)/2;
   const rMin=Math.min(...rS), rMax=Math.max(...rS), rThr=(rMin+rMax)/2;
 
-  // longest run below threshold is the wooden board area
   const [xMin,xMax]=longestRunBelow(cS, cThr);
   const [yMin,yMax]=longestRunBelow(rS, rThr);
 
-  // Convert to symmetric insets (use left/top distances)
   return { insetX: xMin/iw, insetY: yMin/ih };
 }
 
@@ -160,10 +156,10 @@ function inviteLinkFor(target){
   return `https://t.me/${bot}?startapp=${payload}`;
 }
 function buildInviteText(target){
-  const me = uname();
-  const link = inviteLinkFor(target);
-  return `If this person has never played this game before, please send them this link:\n\n` +
-         `Please join me ${me} in a game of Connect 4 by clicking here ${link}`;
+  const id = /^@/.test(target) ? target : '@' + target;
+  const link = inviteLinkFor(target.replace(/^@/,''));
+  // EXACT format requested (with newline)
+  return `Please join me ${id} in a game of Connect 4 by clicking here:\n${link}`;
 }
 async function copyText(text){
   try{ await navigator.clipboard.writeText(text); return true; }
@@ -171,45 +167,39 @@ async function copyText(text){
     const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); return true;
   }
 }
+function clearInviteUI(){
+  const panel = document.getElementById('invitePanel');
+  const info  = document.getElementById('inviteInfo');
+  const actions = document.getElementById('inviteActions');
+  info.textContent=''; actions.classList.add('hidden'); panel.classList.add('hidden');
+}
 function sendInvite(){
   const input=document.getElementById('inviteInput');
   const vRaw=input.value.trim();
-  const v=vRaw.replace(/^@/,'');
+  if(!vRaw){ document.getElementById('inviteInfo').textContent='Enter a username or phone number.'; return; }
+  const v = vRaw.replace(/^@/,'');
   const info=document.getElementById('inviteInfo');
   const actions=document.getElementById('inviteActions');
-  if(!v){ info.textContent='Enter a username or phone number.'; return; }
 
-  const text=buildInviteText(v);
+  const text=buildInviteText(vRaw);
   const linkOnly=inviteLinkFor(v);
-  info.innerHTML = `
-    <div style="margin-bottom:6px;">If this person has never played this game before, please send them this link:</div>
-    <div class="invite-blob">${text.replaceAll('\n','<br>')}</div>
-  `;
+  info.innerHTML = `<div class="invite-blob">${text.replaceAll('\n','<br>')}</div>`;
   actions.classList.remove('hidden');
 
   document.getElementById('copyInviteBtn').onclick = async ()=>{
     const ok=await copyText(text);
-    info.innerHTML += `<div style="margin-top:6px;">${ok?'Copied to clipboard!':'Copy failed — please copy manually.'}</div>`;
+    info.innerHTML = `<div>${ok?'Copied to clipboard!':'Copy failed — please copy manually.'}</div>`;
   };
-  document.getElementById('openChatBtn').onclick = ()=>{
-    if (/^[A-Za-z0-9_]{5,}$/.test(v)) {
-      const url=`https://t.me/${v}`;
-      if (window.Telegram?.WebApp?.openTelegramLink) Telegram.WebApp.openTelegramLink(url);
-      else window.open(url,'_blank');
-    } else {
-      const shareURL=`https://t.me/share/url?url=${encodeURIComponent(linkOnly)}&text=${encodeURIComponent(text)}`;
-      if (window.Telegram?.WebApp?.openTelegramLink) Telegram.WebApp.openTelegramLink(shareURL);
-      else window.open(shareURL,'_blank');
-    }
+  document.getElementById('openChatBtn').onclick = async ()=>{
+    await copyText(text); // ensure copied
+    clearInviteUI();      // remove everything below play buttons
+    // open chat for username; for phone, use share URL
+    const isUsername = /^[A-Za-z0-9_]{5,}$/.test(v);
+    const url = isUsername ? `https://t.me/${v}`
+      : `https://t.me/share/url?url=${encodeURIComponent(linkOnly)}&text=${encodeURIComponent(text)}`;
+    if (window.Telegram?.WebApp?.openTelegramLink) Telegram.WebApp.openTelegramLink(url);
+    else window.open(url,'_blank');
   };
-  document.getElementById('shareBtn').onclick = ()=>{
-    const shareURL=`https://t.me/share/url?url=${encodeURIComponent(linkOnly)}&text=${encodeURIComponent(text)}`;
-    if (window.Telegram?.WebApp?.openTelegramLink) Telegram.WebApp.openTelegramLink(shareURL);
-    else window.open(shareURL,'_blank');
-  };
-
-  // Auto-copy on create
-  copyText(text);
 }
 
 // ====== GAME ======
@@ -238,10 +228,10 @@ function renderBoard(){
 function columnFromEvent(e){
   const wrap=document.getElementById('boardWrapper');
   const rect=wrap.getBoundingClientRect();
-  const x=e.clientX - rect.left, y=e.clientY - rect.top;
-  const w=rect.width, h=rect.height;
-  const left=INSET_X*w, right=w-INSET_X*w, top=INSET_Y*h, bottom=h-INSET_Y*h;
-  if(x<left||x>right||y<top||y>bottom) return null;
+  const x=e.clientX - rect.left;
+  const w=rect.width;
+  const left=INSET_X*w, right=w-INSET_X*w;
+  if(x<left||x>right) return null;
   return Math.max(0, Math.min(COLS-1, Math.floor((x-left)/((right-left)/COLS))));
 }
 function slotCenter(w,h,row,col){
@@ -250,7 +240,7 @@ function slotCenter(w,h,row,col){
   const cellW=innerW/COLS, cellH=innerH/ROWS;
   const cx=left + col*cellW + cellW/2;
   const cy=top  + row*cellH + cellH/2;
-  const size=Math.min(cellW, cellH)*0.9; // slightly larger to fill the ring
+  const size=Math.min(cellW, cellH)*0.9;
   return {cx,cy,size};
 }
 function findDropRow(col){ for(let r=ROWS-1;r>=0;r--) if(grid[r][col]===0) return r; return -1; }
