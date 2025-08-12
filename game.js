@@ -36,16 +36,24 @@ window.addEventListener('load', async ()=>{
   document.getElementById('inviteSendBtn').onclick = sendInvite;
   document.getElementById('backBtn').onclick = ()=>{ renderLeaderboard(); show('leaderboardScreen'); };
 
+  // Pointer support (touch + mouse)
+  const wrapper = document.getElementById('boardWrapper');
+  wrapper.addEventListener('pointerdown', (e)=>{
+    if (document.getElementById('gameScreen').classList.contains('hidden')) return;
+    const col=columnFromEvent(e);
+    if (col!=null) turn(col);
+  });
+
   window.addEventListener('resize', ()=>{
     if (!document.getElementById('gameScreen').classList.contains('hidden')) sizeBoard(); 
   });
 });
 
-// ====== BOARD SIZING (>= 50% of screen) ======
+// ====== BOARD SIZING (>= 55% of screen) ======
 function sizeBoard(){
   const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
   const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
-  const targetH = Math.max(0.5*vh, Math.min(0.8*vh, vw * (6/7)));
+  const targetH = Math.max(0.55*vh, Math.min(0.85*vh, vw * (6/7)));
   const targetW = targetH * (7/6);
   document.getElementById('boardWrapper').style.width = targetW + 'px';
 }
@@ -62,32 +70,64 @@ async function ensureCalibration(){
   }catch(e){ /* keep defaults */ }
 }
 
+function smooth(arr, k=5){
+  const out=new Array(arr.length).fill(0);
+  for(let i=0;i<arr.length;i++){
+    let s=0,c=0;
+    for(let j=-k;j<=k;j++){
+      const idx=i+j; if(idx<0||idx>=arr.length) continue;
+      s+=arr[idx]; c++;
+    }
+    out[i]=s/c;
+  }
+  return out;
+}
+
+function longestRunBelow(arr, thr){
+  let bestStart=0,bestLen=0,curStart=0,curLen=0;
+  for(let i=0;i<arr.length;i++){
+    if(arr[i]<thr){ if(curLen===0) curStart=i; curLen++; }
+    else{ if(curLen>bestLen){ bestLen=curLen; bestStart=curStart; } curLen=0; }
+  }
+  if(curLen>bestLen){ bestLen=curLen; bestStart=curStart; }
+  return [bestStart, bestStart+bestLen-1];
+}
+
 function calibrateFromImage(img){
   const iw = img.naturalWidth, ih = img.naturalHeight;
   const cv = document.createElement('canvas'); cv.width=iw; cv.height=ih;
   const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,iw,ih);
   const data=ctx.getImageData(0,0,iw,ih).data;
 
-  // sample background from top-left corner
-  const N=50; let r=0,g=0,b=0,c=0;
+  // background color estimate from large corner
+  const N=100; let r=0,g=0,b=0,c=0;
   for(let y=0;y<N;y++) for(let x=0;x<N;x++){ const i=(y*iw+x)*4; r+=data[i]; g+=data[i+1]; b+=data[i+2]; c++;}
-  r/=c; g/=c; b/=c; const thr=45;
+  r/=c; g/=c; b/=c; const thr=50;
   const isBg=(x,y)=>{ const i=(y*iw+x)*4, dr=data[i]-r,dg=data[i+1]-g,db=data[i+2]-b; return (dr*dr+dg*dg+db*db)<thr*thr; };
 
-  const y1=Math.floor(ih*0.2), y2=Math.floor(ih*0.7);
-  const colScore=new Array(iw).fill(0);
-  for(let x=0;x<iw;x++){ let s=0; for(let y=y1;y<y2;y++) if(isBg(x,y)) s++; colScore[x]=s/(y2-y1); }
-  const x_thr=0.4; let xMin=0,xMax=iw-1;
-  for(let x=0;x<iw;x++){ if(colScore[x]>x_thr){ xMin=x; break; } }
-  for(let x=iw-1;x>=0;x--){ if(colScore[x]>x_thr){ xMax=x; break; } }
+  // project orange fraction across columns and rows
+  const y1=Math.floor(ih*0.15), y2=Math.floor(ih*0.85);
+  const colFrac=new Array(iw).fill(0);
+  for(let x=0;x<iw;x++){
+    let s=0; for(let y=y1;y<y2;y++) if(isBg(x,y)) s++;
+    colFrac[x]=s/(y2-y1);
+  }
+  const rowX1=Math.floor(iw*0.08), rowX2=Math.floor(iw*0.92);
+  const rowFrac=new Array(ih).fill(0);
+  for(let y=0;y<ih;y++){
+    let s=0; for(let x=rowX1;x<rowX2;x++) if(isBg(x,y)) s++;
+    rowFrac[y]=s/(rowX2-rowX1);
+  }
 
-  const x1=Math.floor(iw*0.12), x2=Math.floor(iw*0.88);
-  const rowScore=new Array(ih).fill(0);
-  for(let y=0;y<ih;y++){ let s=0; for(let x=x1;x<x2;x++) if(isBg(x,y)) s++; rowScore[y]=s/(x2-x1); }
-  const y_thr=0.35; let yMin=0,yMax=ih-1;
-  for(let y=0;y<ih;y++){ if(rowScore[y]>y_thr){ yMin=y; break; } }
-  for(let y=ih-1;y>=0;y--){ if(rowScore[y]>y_thr){ yMax=y; break; } }
+  const cS=smooth(colFrac,7), rS=smooth(rowFrac,7);
+  const cMin=Math.min(...cS), cMax=Math.max(...cS), cThr=(cMin+cMax)/2;
+  const rMin=Math.min(...rS), rMax=Math.max(...rS), rThr=(rMin+rMax)/2;
 
+  // longest run below threshold is the wooden board area
+  const [xMin,xMax]=longestRunBelow(cS, cThr);
+  const [yMin,yMax]=longestRunBelow(rS, rThr);
+
+  // Convert to symmetric insets (use left/top distances)
   return { insetX: xMin/iw, insetY: yMin/ih };
 }
 
@@ -119,36 +159,28 @@ function inviteLinkFor(target){
   const payload = 'invite_to_' + encodeURIComponent(target);
   return `https://t.me/${bot}?startapp=${payload}`;
 }
-
 function buildInviteText(target){
   const me = uname();
   const link = inviteLinkFor(target);
   return `If this person has never played this game before, please send them this link:\n\n` +
          `Please join me ${me} in a game of Connect 4 by clicking here ${link}`;
 }
-
 async function copyText(text){
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch(e){
-    // Fallback: create a temp textarea
-    const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta);
-    ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-    return true;
+  try{ await navigator.clipboard.writeText(text); return true; }
+  catch(e){
+    const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); return true;
   }
 }
-
 function sendInvite(){
   const input=document.getElementById('inviteInput');
-  const v=input.value.trim().replace(/^@/,'');
+  const vRaw=input.value.trim();
+  const v=vRaw.replace(/^@/,'');
   const info=document.getElementById('inviteInfo');
   const actions=document.getElementById('inviteActions');
   if(!v){ info.textContent='Enter a username or phone number.'; return; }
 
-  const text = buildInviteText(v);
-  const linkOnly = inviteLinkFor(v);
+  const text=buildInviteText(v);
+  const linkOnly=inviteLinkFor(v);
   info.innerHTML = `
     <div style="margin-bottom:6px;">If this person has never played this game before, please send them this link:</div>
     <div class="invite-blob">${text.replaceAll('\n','<br>')}</div>
@@ -156,32 +188,27 @@ function sendInvite(){
   actions.classList.remove('hidden');
 
   document.getElementById('copyInviteBtn').onclick = async ()=>{
-    const ok = await copyText(text);
+    const ok=await copyText(text);
     info.innerHTML += `<div style="margin-top:6px;">${ok?'Copied to clipboard!':'Copy failed — please copy manually.'}</div>`;
   };
-
   document.getElementById('openChatBtn').onclick = ()=>{
-    // If username, open their chat. Phones don't have a reliable direct-chat URL, so fall back to share.
     if (/^[A-Za-z0-9_]{5,}$/.test(v)) {
-      const url = `https://t.me/${v}`;
+      const url=`https://t.me/${v}`;
       if (window.Telegram?.WebApp?.openTelegramLink) Telegram.WebApp.openTelegramLink(url);
-      else window.open(url, '_blank');
-      // User can paste the pre-copied text
+      else window.open(url,'_blank');
     } else {
-      // fallback to share flow
-      const shareURL = `https://t.me/share/url?url=${encodeURIComponent(linkOnly)}&text=${encodeURIComponent(text)}`;
+      const shareURL=`https://t.me/share/url?url=${encodeURIComponent(linkOnly)}&text=${encodeURIComponent(text)}`;
       if (window.Telegram?.WebApp?.openTelegramLink) Telegram.WebApp.openTelegramLink(shareURL);
-      else window.open(shareURL, '_blank');
+      else window.open(shareURL,'_blank');
     }
   };
-
   document.getElementById('shareBtn').onclick = ()=>{
-    const shareURL = `https://t.me/share/url?url=${encodeURIComponent(linkOnly)}&text=${encodeURIComponent(text)}`;
+    const shareURL=`https://t.me/share/url?url=${encodeURIComponent(linkOnly)}&text=${encodeURIComponent(text)}`;
     if (window.Telegram?.WebApp?.openTelegramLink) Telegram.WebApp.openTelegramLink(shareURL);
-    else window.open(shareURL, '_blank');
+    else window.open(shareURL,'_blank');
   };
 
-  // Auto-copy on create to streamline UX
+  // Auto-copy on create
   copyText(text);
 }
 
@@ -189,18 +216,8 @@ function sendInvite(){
 function reset(){ grid = Array.from({length:ROWS},()=>Array(COLS).fill(0)); current=1; gameOver=false; }
 function startGame(mode){
   vsComputer=(mode==='computer'); reset(); show('gameScreen'); sizeBoard(); renderBoard();
-  document.getElementById('boardWrapper').onclick = (e)=>{
-    const col = columnFromEvent(e);
-    if (col!=null) turn(col);
-  };
-  setStatus();
+  document.getElementById('status').textContent = vsComputer ? `Your turn (Red) — Level ${aiLevel}` : 'Red turn (You)';
 }
-function setStatus(){
-  const s=document.getElementById('status'); if (gameOver) return;
-  if (vsComputer) s.textContent = current===1 ? `Your turn (Red) — Level ${aiLevel}` : `Computer (Level ${aiLevel}) thinking…`;
-  else s.textContent = current===1 ? 'Red turn (You)' : 'Yellow turn (Opponent)';
-}
-
 function renderBoard(){
   const chips=document.getElementById('chipsLayer');
   const wrap=document.getElementById('boardWrapper');
@@ -218,31 +235,25 @@ function renderBoard(){
     }
   }
 }
-
 function columnFromEvent(e){
   const wrap=document.getElementById('boardWrapper');
   const rect=wrap.getBoundingClientRect();
-  const x=e.clientX - rect.left, y = e.clientY - rect.top;
+  const x=e.clientX - rect.left, y=e.clientY - rect.top;
   const w=rect.width, h=rect.height;
-  const left=INSET_X*w, right=w-INSET_X*w;
-  const top=INSET_Y*h, bottom=h-INSET_Y*h;
-  if (x<left || x>right || y<top || y>bottom) return null;
-  const col = Math.floor((x-left)/((right-left)/COLS));
-  return Math.max(0, Math.min(COLS-1, col));
+  const left=INSET_X*w, right=w-INSET_X*w, top=INSET_Y*h, bottom=h-INSET_Y*h;
+  if(x<left||x>right||y<top||y>bottom) return null;
+  return Math.max(0, Math.min(COLS-1, Math.floor((x-left)/((right-left)/COLS))));
 }
-
 function slotCenter(w,h,row,col){
   const left=INSET_X*w, top=INSET_Y*h;
   const innerW=w-2*INSET_X*w, innerH=h-2*INSET_Y*h;
   const cellW=innerW/COLS, cellH=innerH/ROWS;
   const cx=left + col*cellW + cellW/2;
   const cy=top  + row*cellH + cellH/2;
-  const size=Math.min(cellW, cellH)*0.88;
+  const size=Math.min(cellW, cellH)*0.9; // slightly larger to fill the ring
   return {cx,cy,size};
 }
-
 function findDropRow(col){ for(let r=ROWS-1;r>=0;r--) if(grid[r][col]===0) return r; return -1; }
-
 function animateDrop(row,col,color,cb){
   const wrap=document.getElementById('boardWrapper');
   const chips=document.getElementById('chipsLayer');
@@ -255,11 +266,14 @@ function animateDrop(row,col,color,cb){
   requestAnimationFrame(()=>{ img.style.top=`${cy}px`; });
   setTimeout(()=>{ cb&&cb(); }, 420);
 }
-
+function setStatus(){
+  const s=document.getElementById('status'); if (gameOver) return;
+  if(vsComputer) s.textContent = current===1 ? `Your turn (Red) — Level ${aiLevel}` : `Computer (Level ${aiLevel}) thinking…`;
+  else s.textContent = current===1 ? 'Red turn (You)' : 'Yellow turn (Opponent)';
+}
 function turn(col){
   if (gameOver) return;
-  const row=findDropRow(col);
-  if (row===-1) return;
+  const row=findDropRow(col); if(row===-1) return;
   animateDrop(row,col,current, ()=>{
     grid[row][col]=current;
     if (checkWin(current)) { end(current); return; }
@@ -270,26 +284,20 @@ function turn(col){
     }
   });
 }
-
 function isFull(){ return grid[0].every(v=>v!==0); }
-
 // Robust 4-direction win detection
 function checkWin(p){
   const dirs=[[0,1],[1,0],[1,1],[-1,1]];
-  for(let r=0;r<ROWS;r++){
-    for(let c=0;c<COLS;c++){
-      if(grid[r][c]!==p) continue;
-      for(const [dr,dc] of dirs){
-        let k=1;
-        while(k<4 && inBounds(r+dr*k,c+dc*k) && grid[r+dr*k][c+dc*k]===p) k++;
-        if(k===4) return true;
-      }
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    if(grid[r][c]!==p) continue;
+    for(const [dr,dc] of dirs){
+      let k=1; while(k<4 && inBounds(r+dr*k,c+dc*k) && grid[r+dr*k][c+dc*k]===p) k++;
+      if(k===4) return true;
     }
   }
   return false;
 }
 function inBounds(r,c){ return r>=0 && r<ROWS && c>=0 && c<COLS; }
-
 function end(winner){
   gameOver=true;
   const me=uname();
@@ -309,8 +317,7 @@ function availableCols(){ const a=[]; for(let c=0;c<COLS;c++) if(grid[0][c]===0)
 function centerBias(a){ return a.reduce((b,c)=> b==null?c : Math.abs(c-3)<Math.abs(b-3)?c:b, null); }
 function simulateDrop(g,c,p){ for(let r=ROWS-1;r>=0;r--) if(g[r][c]===0) return r; return -1; }
 function simGrid(g,r,c,p){ const ng=g.map(row=>row.slice()); ng[r][c]=p; return ng; }
-function hasWin(g,p){
-  // reuse robust check on a copy grid
+function hasWinOnGrid(g,p){
   const dirs=[[0,1],[1,0],[1,1],[-1,1]];
   for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
     if(g[r][c]!==p) continue;
@@ -321,23 +328,20 @@ function hasWin(g,p){
   }
   return false;
 }
-
 function findImmediateWin(player){
   for(const c of availableCols()){
     const r=simulateDrop(grid,c,player); if(r===-1) continue;
-    const g=simGrid(grid,r,c,player); if(hasWin(g,player)) return c;
+    const g=simGrid(grid,r,c,player); if(hasWinOnGrid(g,player)) return c;
   }
   return null;
 }
-
 function scorePosition(g){
-  if (hasWin(g,2)) return 1000;
-  if (hasWin(g,1)) return -800;
+  if (hasWinOnGrid(g,2)) return 1000;
+  if (hasWinOnGrid(g,1)) return -800;
   let s=0; for(let r=0;r<ROWS;r++) if(g[r][3]===2) s+=3; return s;
 }
-
 function minimax(g, depth, isMax, alpha, beta){
-  if (depth===0 || hasWin(g,1) || hasWin(g,2)) return scorePosition(g);
+  if (depth===0 || hasWinOnGrid(g,1) || hasWinOnGrid(g,2)) return scorePosition(g);
   const avail=[]; for(let c=0;c<COLS;c++) if(g[0][c]===0) avail.push(c);
   if (avail.length===0) return 0;
   if (isMax){
@@ -358,7 +362,6 @@ function minimax(g, depth, isMax, alpha, beta){
     return best;
   }
 }
-
 function aiChoose(){
   const avail=availableCols();
   if (aiLevel<=1) return centerBias(avail);

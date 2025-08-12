@@ -76,10 +76,10 @@ button {
 .invite-info { color: #fff; font-size: 14px; margin-top: 6px; text-align: center; max-width: 90%; }
 .invite-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 
-/* Game layout: board takes >= 50% of screen height */
+/* Game layout: board takes >= 55% of screen height */
 #gameLayout {
   width: 100%;
-  max-width: 900px;
+  max-width: 1000px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -89,8 +89,8 @@ button {
 
 #boardWrapper {
   position: relative;
-  width: 95vw;           /* will be resized via JS to keep >= 50vh */
-  max-width: 900px;
+  width: 96vw;           /* will be resized via JS to keep >= 55vh */
+  max-width: 1000px;
   aspect-ratio: 7 / 6;
   background: transparent;
 }
@@ -113,7 +113,7 @@ button {
 
 #hud {
   width: 100%;
-  max-width: 900px;
+  max-width: 1000px;
   display: flex;
   align-items: center;
   justify-content: space-between;
