@@ -49,6 +49,39 @@ window.addEventListener('load', async ()=>{
   });
 });
 
+
+
+// ====== HOLE MASK (chips only visible in the 7x6 circles) ======
+function applyHolesMask(){
+  const layer = document.getElementById('chipsLayer');
+  const wrap = document.getElementById('boardWrapper');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  if (!W || !H) return;
+
+  const left = INSET_X * W, top = INSET_Y * H;
+  const innerW = W - 2*INSET_X*W, innerH = H - 2*INSET_Y*H;
+  const cellW = innerW / COLS, cellH = innerH / ROWS;
+  const r = Math.min(cellW, cellH) * 0.49; // circle radius ~ matches hole
+
+  // Build an SVG mask: white circles = visible; black = hidden
+  let circles = '';
+  for (let rIdx=0; rIdx<ROWS; rIdx++){
+    for (let cIdx=0; cIdx<COLS; cIdx++){
+      const cx = left + cIdx*cellW + cellW/2;
+      const cy = top  + rIdx*cellH + cellH/2;
+      circles += `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${r.toFixed(2)}" fill="white"/>`;
+    }
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}"><defs><mask id="m"><rect width="100%" height="100%" fill="black"/>${circles}</mask></defs><rect width="100%" height="100%" fill="white" mask="url(#m)"/></svg>`;
+  const url = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+
+  layer.style.webkitMaskImage = `url('${url}')`;
+  layer.style.maskImage = `url('${url}')`;
+  layer.style.webkitMaskRepeat = 'no-repeat';
+  layer.style.maskRepeat = 'no-repeat';
+  layer.style.webkitMaskSize = '100% 100%';
+  layer.style.maskSize = '100% 100%';
+}
 // ====== BOARD SIZING (>= 55% of screen) ======
 function sizeBoard(){
   const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
@@ -56,6 +89,7 @@ function sizeBoard(){
   const targetH = Math.max(0.55*vh, Math.min(0.85*vh, vw * (6/7)));
   const targetW = targetH * (7/6);
   document.getElementById('boardWrapper').style.width = targetW + 'px';
+  applyHolesMask();
 }
 
 // ====== AUTO CALIBRATION ======
@@ -66,6 +100,7 @@ async function ensureCalibration(){
     const {insetX, insetY} = calibrateFromImage(img);
     if (isFinite(insetX) && isFinite(insetY)){
       INSET_X = insetX; INSET_Y = insetY;
+      applyHolesMask();
     }
   }catch(e){ /* keep defaults */ }
 }
@@ -201,7 +236,7 @@ function sendInvite(){
 // ====== GAME ======
 function reset(){ grid = Array.from({length:ROWS},()=>Array(COLS).fill(0)); current=1; gameOver=false; }
 function startGame(mode){
-  vsComputer=(mode==='computer'); reset(); show('gameScreen'); sizeBoard(); renderBoard();
+  vsComputer=(mode==='computer'); reset(); show('gameScreen'); sizeBoard(); applyHolesMask(); renderBoard();
   document.getElementById('status').textContent = vsComputer ? `Your turn (Red) — Level ${aiLevel}` : 'Red turn (You)';
 }
 function renderBoard(){
