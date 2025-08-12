@@ -93,16 +93,25 @@ function sizeBoard(){
 }
 
 // ====== AUTO CALIBRATION ======
+function clamp(v, lo, hi){ return Math.min(hi, Math.max(lo, v)); }
+function applyCalibration(insetX, insetY){
+  // Clamp to sane ranges for this board style
+  const x = clamp(insetX, 0.04, 0.12);
+  const y = clamp(insetY, 0.08, 0.18);
+  INSET_X = isFinite(x) ? x : INSET_X;
+  INSET_Y = isFinite(y) ? y : INSET_Y;
+  applyHolesMask();
+}
 async function ensureCalibration(){
   const img = document.getElementById('boardImage');
   await imgDecode(img);
   try{
     const {insetX, insetY} = calibrateFromImage(img);
     if (isFinite(insetX) && isFinite(insetY)){
-      INSET_X = insetX; INSET_Y = insetY;
+      applyCalibration(insetX, insetY);
       applyHolesMask();
     }
-  }catch(e){ /* keep defaults */ }
+  }catch(e){ applyCalibration(INSET_X, INSET_Y); }
 }
 
 function smooth(arr, k=5){
@@ -271,7 +280,7 @@ function slotCenter(w,h,row,col){
   const cellW=innerW/COLS, cellH=innerH/ROWS;
   const cx=left + col*cellW + cellW/2;
   const cy=top  + row*cellH + cellH/2;
-  const size=Math.min(cellW, cellH)*0.96; // bigger chips + visible
+  const size=Math.min(cellW, cellH)*0.98; // bigger chips + visible
   return {cx,cy,size};
 }
 function findDropRow(col){ for(let r=ROWS-1;r>=0;r--) if(grid[r][col]===0) return r; return -1; }
