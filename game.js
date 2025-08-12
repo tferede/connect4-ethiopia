@@ -36,7 +36,7 @@ window.addEventListener('load', async ()=>{
   document.getElementById('inviteSendBtn').onclick = sendInvite;
   document.getElementById('backBtn').onclick = ()=>{ renderLeaderboard(); show('leaderboardScreen'); };
 
-  // Make sure input works on both mouse and touch
+  // Input (touch+mouse)
   const wrapper = document.getElementById('boardWrapper');
   wrapper.addEventListener('pointerdown', (e)=>{
     if (document.getElementById('gameScreen').classList.contains('hidden')) return;
@@ -97,13 +97,11 @@ function calibrateFromImage(img){
   const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,iw,ih);
   const data=ctx.getImageData(0,0,iw,ih).data;
 
-  // background color estimate from large corner
   const N=100; let r=0,g=0,b=0,c=0;
   for(let y=0;y<N;y++) for(let x=0;x<N;x++){ const i=(y*iw+x)*4; r+=data[i]; g+=data[i+1]; b+=data[i+2]; c++;}
   r/=c; g/=c; b/=c; const thr=50;
   const isBg=(x,y)=>{ const i=(y*iw+x)*4, dr=data[i]-r,dg=data[i+1]-g,db=data[i+2]-b; return (dr*dr+dg*dg+db*db)<thr*thr; };
 
-  // project background fraction across columns and rows
   const y1=Math.floor(ih*0.15), y2=Math.floor(ih*0.85);
   const colFrac=new Array(iw).fill(0);
   for(let x=0;x<iw;x++){
@@ -158,7 +156,6 @@ function inviteLinkFor(target){
 function buildInviteText(target){
   const id = /^@/.test(target) ? target : '@' + target;
   const link = inviteLinkFor(target.replace(/^@/,''));
-  // EXACT format requested (with newline)
   return `Please join me ${id} in a game of Connect 4 by clicking here:\n${link}`;
 }
 async function copyText(text){
@@ -191,9 +188,8 @@ function sendInvite(){
     info.innerHTML = `<div>${ok?'Copied to clipboard!':'Copy failed — please copy manually.'}</div>`;
   };
   document.getElementById('openChatBtn').onclick = async ()=>{
-    await copyText(text); // ensure copied
-    clearInviteUI();      // remove everything below play buttons
-    // open chat for username; for phone, use share URL
+    await copyText(text);
+    clearInviteUI();
     const isUsername = /^[A-Za-z0-9_]{5,}$/.test(v);
     const url = isUsername ? `https://t.me/${v}`
       : `https://t.me/share/url?url=${encodeURIComponent(linkOnly)}&text=${encodeURIComponent(text)}`;
@@ -240,7 +236,7 @@ function slotCenter(w,h,row,col){
   const cellW=innerW/COLS, cellH=innerH/ROWS;
   const cx=left + col*cellW + cellW/2;
   const cy=top  + row*cellH + cellH/2;
-  const size=Math.min(cellW, cellH)*0.9;
+  const size=Math.min(cellW, cellH)*0.96; // bigger chips + visible
   return {cx,cy,size};
 }
 function findDropRow(col){ for(let r=ROWS-1;r>=0;r--) if(grid[r][col]===0) return r; return -1; }

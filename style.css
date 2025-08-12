@@ -76,6 +76,18 @@ button {
 .invite-info { color: #fff; font-size: 14px; margin-top: 6px; text-align: center; max-width: 90%; }
 .invite-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 
+/* Scoring box */
+.scoring-box{
+  color:#fff;
+  margin: 10px auto 2px;
+  padding: 10px 12px;
+  max-width: 720px;
+  text-align: left;
+  line-height: 1.4;
+  background: rgba(0,0,0,0.25);
+  border-radius: 10px;
+}
+
 /* Game layout: board takes >= 55% of screen height */
 #gameLayout {
   width: 100%;
@@ -93,22 +105,36 @@ button {
   max-width: 1000px;
   aspect-ratio: 7 / 6;
   background: transparent;
+  overflow: hidden;
 }
 
 #boardImage {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
   pointer-events: none;
   display: block;
+  z-index: 1;
 }
 
-#chipsLayer, #debugGrid {
+#chipsLayer {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
+  z-index: 2;
+}
+
+#debugGrid {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
 }
 
 #hud {
@@ -127,17 +153,4 @@ button {
   position: absolute;
   transform: translate(-50%, -50%);
   transition: top 0.4s ease;
-}
-
-
-/* Scoring box between leaderboard and buttons */
-.scoring-box{
-  color:#fff;
-  margin: 10px auto 2px;
-  padding: 10px 12px;
-  max-width: 720px;
-  text-align: left;
-  line-height: 1.4;
-  background: rgba(0,0,0,0.25);
-  border-radius: 10px;
 }

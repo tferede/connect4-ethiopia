@@ -38,6 +38,7 @@
         <thead><tr><th>#</th><th>Username</th><th>Points</th></tr></thead>
         <tbody id="leaderboardBody"></tbody>
       </table>
+
       <div id="scoringBox" class="scoring-box">
         <strong>SCORING SYSTEM:</strong><br>
         Goal is always to play &amp; preferably against another person!<br><br>
@@ -48,6 +49,7 @@
         Losing against another player (5pts)<br>
         Losing against computer (3pts)
       </div>
+
       <div class="button-row">
         <button id="playComputerBtn">Play vs Computer</button>
         <button id="playPlayerBtn">Play vs Player</button>
@@ -70,9 +72,10 @@
   <div id="gameScreen" class="screen hidden">
     <div id="gameLayout">
       <div id="boardWrapper">
+        <!-- Place board first (z-index 1), chips above (z-index 2), debug grid top (z-index 3) -->
+        <img src="assets/Board.png" alt="Board" id="boardImage" />
         <div id="chipsLayer"></div>
         <canvas id="debugGrid" class="hidden" aria-hidden="true"></canvas>
-        <img src="assets/Board.png" alt="Board" id="boardImage" />
       </div>
       <div id="hud">
         <div id="status">Your turn (Red) — tap a column.</div>
